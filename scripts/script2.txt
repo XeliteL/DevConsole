@@ -1,0 +1,7 @@
+# Проверка парсера 
+
+ls "my folder"
+ls 'another folder'
+ls one\ two\ three
+cd "dir with space"
+exit

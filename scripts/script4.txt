@@ -1,0 +1,5 @@
+help
+ls
+ls "quoted name"
+cd test
+exit

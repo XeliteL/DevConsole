@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -11,14 +12,15 @@ import (
 // Структура VFS
 type VFS struct {
 	Name string
+	Path string
 }
 
 // === Создание нового VFS ===
-func newVFS(name string) *VFS {
+func newVFS(name, path string) *VFS {
 	if name == "" {
 		name = "userVFS" // Имя по умолчанию
 	}
-	return &VFS{Name: name}
+	return &VFS{Name: name, Path: path}
 }
 
 func switchScreening(r rune, isLast bool, curToken *strings.Builder,
@@ -60,7 +62,6 @@ func switchScreening(r rune, isLast bool, curToken *strings.Builder,
 				args = append(args, curToken.String())
 				curToken.Reset()
 			}
-			// Пропуск множественных пробелов
 		}
 	default:
 		curToken.WriteRune(r)
@@ -68,7 +69,7 @@ func switchScreening(r rune, isLast bool, curToken *strings.Builder,
 
 	// Вывод ошибки, если в конце строки служебный символ
 	if isLast && escaped {
-		return nil, inSingle, inDouble, escaped, errors.New("Служебный символ в конце строки")
+		return nil, inSingle, inDouble, escaped, errors.New("служебный символ в конце строки")
 	}
 
 	return args, inSingle, inDouble, escaped, nil
@@ -96,7 +97,7 @@ func parseArgs(line string) ([]string, error) {
 
 	// Проверка закрытия кавычек
 	if inSingle || inDouble {
-		return nil, errors.New("Незакрытая кавычка")
+		return nil, errors.New("незакрытая кавычка")
 	}
 
 	// Добавление последнего токена при его наличии
@@ -108,86 +109,145 @@ func parseArgs(line string) ([]string, error) {
 }
 
 // === Обработчик команд ===
-func handleCommand(vfs *VFS, args []string) {
+func handleCommand(vfs *VFS, args []string) error {
 	// При пустой строке
 	if len(args) == 0 {
-		return
+		return nil
 	}
 
 	cmd := args[0] // Определение команды
 	switch cmd {
 	case "help":
 		printHelp()
-	case "switch", "quit":
+	case "exit", "quit":
 		fmt.Println("Выход")
 		os.Exit(0)
 	case "ls":
 		// ls может выводить максимум одну директорию
 		if len(args) > 2 {
-			fmt.Println("Ошибка: неправильное использование ls [path]")
-			return
+			return errors.New("ошибка: неправильное использование ls [path]")
 		}
-		fmt.Printf("[stub] ls вызван. Аргументы: %v/n", args[1:]) // Заглушка
+		fmt.Printf("[stub] ls вызван. Аргументы: %v\n", args[1:]) // Заглушка
 	case "cd":
 		// У cd может быть только 1 аргумент
 		if len(args) != 2 {
-			fmt.Println("Ошибка: неправильное использование cd <path>")
-			return
+			return errors.New("ошибка: неправильное использование cd <path>")
 		}
-		fmt.Printf("[stub] cd вызван. Аргумент: %s/n", args[1]) // Заглушка
+		fmt.Printf("[stub] cd вызван. Аргумент: %s\n", args[1]) // Заглушка
 	default:
-		fmt.Printf("Ошбика: неизвестная команда '%s'\n", cmd)
+		return fmt.Errorf("ошибка: неизвестная команда '%s'", cmd)
 	}
+
+	return nil
 }
 
 // === Список команд ===
 func printHelp() {
 	fmt.Println("Доступные команды:")
-	fmt.Println(" help       - показать подсказку")
-	fmt.Println(" ls [path]  - показать содержимое(заглушка)")
-	fmt.Println(" cd <path>  - сменить путь(заглушка)")
-	fmt.Println(" exit, quit - выйти из эмулятора")
+	fmt.Println("  help       - показать подсказку")
+	fmt.Println("  ls [path]  - показать содержимое(заглушка)")
+	fmt.Println("  cd <path>  - сменить путь(заглушка)")
+	fmt.Println("  exit, quit - выйти из эмулятора")
 }
 
-func main() {
-	// === Инициализация эмулятора ===
-	vfs := newVFS("xdVFS") // Создание VFS
-
-	// Приветственное сообщение
-	fmt.Printf("Эмулятор оболочки. VFS: %s\n", vfs.Name)
-	fmt.Println("Введите 'help' для списка команд. Для выхода введите команды: 'quit' либо 'exit'.")
-
-	scanner := bufio.NewScanner(os.Stdin) // Сканер для чтения строк
-
-	// === Главный цикл REPL ===
+// === Интерактивный режим запуска REPL ===
+func runREPL(vfs *VFS) {
+	scanner := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Printf("%s> ", vfs.Name) // Приглашение к вводу
 
-		// Ошибка ввода или EOF
-		if !scanner.Scan() {
+		// Чтение строки пользоватиля
+		if !scanner.Scan() { // Ошибка ввода
 			fmt.Println()
 			break
 		}
-		line := scanner.Text()
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue // Пропуск пустого ввода
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" { // Пропуск пустого ввода
+			continue
 		}
 
-		tokens, err := parseArgs(line) // Разбиение строки на токены
-		if err != nil {                // Ошибка парсинга
+		// Разбиение строки на токены
+		tokens, err := parseArgs(line)
+		if err != nil {
 			fmt.Printf("Ошибка парсера: %v\n", err)
 			continue
 		}
 
-		if len(tokens) == 0 {
+		// Выполнение команды обработчика	
+		if err := handleCommand(vfs, tokens); err != nil {
+			fmt.Printf("Ошибка обработчика: %v\n", err)
+		}
+	}
+
+	// Проверка ошибок ввода
+	if err := scanner.Err(); err != nil { 
+		fmt.Fprintf(os.Stderr,"Ошибка чтения: %v\n", err)
+	}
+}
+
+// === Запуск REPL по скрипту ===
+func runScript(vfs *VFS, path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf("не удалось открыть скрипт: %v", err)
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	lineNum := 0
+
+	for scanner.Scan() {
+		lineNum++
+		line := strings.TrimSpace(scanner.Text())
+
+		// Пропуск пустых строк и комментариев
+		if (line == "" || strings.HasPrefix(line, "#")) {
 			continue
 		}
 
-		handleCommand(vfs, tokens) // Передача токенов обработчику команд
+		// Имитация диалога с пользователем
+		fmt.Printf("%s> %s\n", vfs.Name, line)
+
+		// Парсинг и выполнение команды обработчика
+		tokens, err := parseArgs(line)
+		if err != nil {               
+			fmt.Printf("Ошибка парсера: %v\n", err)
+			continue
+		}
+
+		if err := handleCommand(vfs, tokens); err != nil { 
+			fmt.Printf("Ошибка обработчика: %v\n", err)
+		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		fmt.Fprintf(os.Stderr, "Ошибка чтения ввода %v\n", err)
+		return fmt.Errorf("ошибка чтения скрипта: %v", err)
 	}
+	return nil
+}
+
+func main() {
+	// === Обработка параметров командной строки === 
+	pathVFS := flag.String("VFS", "", "Путь к физическому расположение VFS")
+	pathScript := flag.String("Script", "", "Путь к стартовому скрипту")
+	flag.Parse()
+
+	// Отладочный вывод параметров
+	fmt.Println("=== Запуск эмулятора ===")
+	fmt.Printf("VFS path: %s\n", *pathVFS)
+	fmt.Printf("Script path: %s\n", *pathScript)
+
+	// Создание VFS
+	vfs := newVFS("xdVFS", *pathVFS)
+
+	// Запуск скрипта
+	if *pathScript != "" {
+		if err := runScript(vfs, *pathScript); err != nil {
+			fmt.Printf("Скрипт остановлен: %v\n", err)
+			return
+		}
+	}
+
+	// Запуск в интерактивном режиме при отсутствии скрипта
+	runREPL(vfs)
 }
