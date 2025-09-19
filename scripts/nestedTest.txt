@@ -1,0 +1,10 @@
+# Проверка вложенной структуры
+
+help
+ls
+ls subdir
+cd subdir
+ls nested
+cd ..
+foobar
+exit

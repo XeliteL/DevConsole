@@ -6,23 +6,66 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 )
 
-// Структура VFS
-type VFS struct {
-	Name string
-	Path string
+// === Структуры данных для VFS ===
+
+// Папка/файл внутри VFS
+type Node struct {
+	Name     string // Имя файла/папки
+	IsDir    bool // Файл или папка
+	Children []*Node // Список дочерних элементов
+	Parent   *Node // Ссылка на родительскую директорию
 }
 
-// === Создание нового VFS ===
-func newVFS(name, path string) *VFS {
-	if name == "" {
-		name = "userVFS" // Имя по умолчанию
+// Текущая директория
+var currentDir *Node
+
+// Создание нового пустого VFS
+func newEmptyVFS() *Node {
+	return &Node{
+		Name:  "xdVFS",
+		IsDir: true,
 	}
-	return &VFS{Name: name, Path: path}
 }
 
+// Построение дерева из директории
+func buildVFS(path string, parent *Node) (*Node, error) {
+	info, err := os.Stat(path) // Получение информации о файле/директории
+	if err != nil {
+		return nil, err
+	}
+
+	node := &Node{
+		Name:   info.Name(),
+		IsDir:  info.IsDir(),
+		Parent: parent,
+	}
+
+	// Чтение содержимого, если это директория
+	if info.IsDir() {
+		entries, err := os.ReadDir(path)
+		if err != nil {
+			return nil, err
+		}
+
+		// Создание дочернего узла для каждого элемента
+		for _, e := range entries {
+			childPath := filepath.Join(path, e.Name())
+			child, err := buildVFS(childPath, node)
+			if err != nil {
+				return nil, err
+			}
+			node.Children = append(node.Children, child)
+		}
+	}
+
+	return node, nil
+}
+
+// === Парсер строки, вводимой пользователем, с экранированием и поддержкой кавычек ===
 func switchScreening(r rune, isLast bool, curToken *strings.Builder,
 	args []string, inSingle, inDouble, escaped bool,
 ) ([]string, bool, bool, bool, error) {
@@ -75,7 +118,6 @@ func switchScreening(r rune, isLast bool, curToken *strings.Builder,
 	return args, inSingle, inDouble, escaped, nil
 }
 
-// === Парсер строки, вводимой пользователем, с экранированием и поддержкой кавычек ===
 // Возвращает слайс токенов либо ошибку при незакрытой кавычки
 func parseArgs(line string) ([]string, error) {
 	var args []string
@@ -109,7 +151,7 @@ func parseArgs(line string) ([]string, error) {
 }
 
 // === Обработчик команд ===
-func handleCommand(vfs *VFS, args []string) error {
+func handleCommand(args []string) error {
 	// При пустой строке
 	if len(args) == 0 {
 		return nil
@@ -151,10 +193,10 @@ func printHelp() {
 }
 
 // === Интерактивный режим запуска REPL ===
-func runREPL(vfs *VFS) {
+func runREPL() {
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
-		fmt.Printf("%s> ", vfs.Name) // Приглашение к вводу
+		fmt.Printf("%s> ", currentDir.Name) // Приглашение к вводу
 
 		// Чтение строки пользоватиля
 		if !scanner.Scan() { // Ошибка ввода
@@ -173,20 +215,20 @@ func runREPL(vfs *VFS) {
 			continue
 		}
 
-		// Выполнение команды обработчика	
-		if err := handleCommand(vfs, tokens); err != nil {
+		// Выполнение команды обработчика
+		if err := handleCommand(tokens); err != nil {
 			fmt.Printf("Ошибка обработчика: %v\n", err)
 		}
 	}
 
 	// Проверка ошибок ввода
-	if err := scanner.Err(); err != nil { 
-		fmt.Fprintf(os.Stderr,"Ошибка чтения: %v\n", err)
+	if err := scanner.Err(); err != nil {
+		fmt.Fprintf(os.Stderr, "Ошибка чтения: %v\n", err)
 	}
 }
 
 // === Запуск REPL по скрипту ===
-func runScript(vfs *VFS, path string) error {
+func runScript(path string) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("не удалось открыть скрипт: %v", err)
@@ -201,21 +243,21 @@ func runScript(vfs *VFS, path string) error {
 		line := strings.TrimSpace(scanner.Text())
 
 		// Пропуск пустых строк и комментариев
-		if (line == "" || strings.HasPrefix(line, "#")) {
+		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
 		// Имитация диалога с пользователем
-		fmt.Printf("%s> %s\n", vfs.Name, line)
+		fmt.Printf("%s> %s\n", currentDir.Name, line)
 
 		// Парсинг и выполнение команды обработчика
 		tokens, err := parseArgs(line)
-		if err != nil {               
+		if err != nil {
 			fmt.Printf("Ошибка парсера: %v\n", err)
 			continue
 		}
 
-		if err := handleCommand(vfs, tokens); err != nil { 
+		if err := handleCommand(tokens); err != nil {
 			fmt.Printf("Ошибка обработчика: %v\n", err)
 		}
 	}
@@ -227,8 +269,8 @@ func runScript(vfs *VFS, path string) error {
 }
 
 func main() {
-	// === Обработка параметров командной строки === 
-	pathVFS := flag.String("VFS", "", "Путь к физическому расположение VFS")
+	// === Обработка параметров командной строки ===
+	pathVFS := flag.String("VFS", "", "Путь к директории VFS")
 	pathScript := flag.String("Script", "", "Путь к стартовому скрипту")
 	flag.Parse()
 
@@ -238,16 +280,27 @@ func main() {
 	fmt.Printf("Script path: %s\n", *pathScript)
 
 	// Создание VFS
-	vfs := newVFS("xdVFS", *pathVFS)
+	var root *Node
+	var err error
+	if *pathVFS != "" {
+		root, err = buildVFS(*pathVFS, nil)
+		if err != nil {
+			fmt.Printf("Ошибка при загрузке VFS: %v\n", err)
+			root = newEmptyVFS()
+		}
+	} else {
+		root = newEmptyVFS()
+	}
+	currentDir = root // Ставаим корень, как текущую директорию
 
 	// Запуск скрипта
 	if *pathScript != "" {
-		if err := runScript(vfs, *pathScript); err != nil {
+		if err := runScript(*pathScript); err != nil {
 			fmt.Printf("Скрипт остановлен: %v\n", err)
 			return
 		}
 	}
 
 	// Запуск в интерактивном режиме при отсутствии скрипта
-	runREPL(vfs)
+	runREPL()
 }

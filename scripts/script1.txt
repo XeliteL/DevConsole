@@ -1,6 +1,0 @@
-# Базовые команды
-
-help
-ls
-cd folder
-exit

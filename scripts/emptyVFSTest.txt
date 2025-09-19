@@ -1,0 +1,5 @@
+# Проверка работы с пустой VFS
+help
+ls
+cd test
+exit
