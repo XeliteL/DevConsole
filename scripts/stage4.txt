@@ -1,0 +1,17 @@
+# Проверка содержимого
+ls
+cd subdir
+ls
+cd ..
+
+# Проверка history
+history
+
+# Проверка uname
+uname
+
+# Ошибки
+cd not_exist
+foobar
+
+exit
