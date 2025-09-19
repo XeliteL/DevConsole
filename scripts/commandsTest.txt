@@ -1,0 +1,15 @@
+# Проверка команд
+ls
+cd subdir
+ls
+cd ..
+
+history
+
+uname
+
+# Ошибки
+
+cd not_exist
+foobar
+exit

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -14,14 +15,17 @@ import (
 
 // Папка/файл внутри VFS
 type Node struct {
-	Name     string // Имя файла/папки
-	IsDir    bool // Файл или папка
+	Name     string  // Имя файла/папки
+	IsDir    bool    // Файл или папка
 	Children []*Node // Список дочерних элементов
-	Parent   *Node // Ссылка на родительскую директорию
+	Parent   *Node   // Ссылка на родительскую директорию
 }
 
 // Текущая директория
 var currentDir *Node
+
+// История команд
+var history []string
 
 // Создание нового пустого VFS
 func newEmptyVFS() *Node {
@@ -157,26 +161,82 @@ func handleCommand(args []string) error {
 		return nil
 	}
 
+	// Сохранение команды в историю
+	history = append(history, strings.Join(args, " "))
+
 	cmd := args[0] // Определение команды
 	switch cmd {
-	case "help":
+	case "help": // Вывод окна помощи
 		printHelp()
-	case "exit", "quit":
+
+	case "exit", "quit": // Команды завершения программы
 		fmt.Println("Выход")
 		os.Exit(0)
-	case "ls":
-		// ls может выводить максимум одну директорию
-		if len(args) > 2 {
-			return errors.New("ошибка: неправильное использование ls [path]")
+
+	case "ls": // Вывод содержимого директории
+		dir := currentDir // При отсутствии аргумента выводим текущую директорию
+		// При указании пути
+		if len(args) == 2 {
+			found := false
+			// Поиск среди дочерних элементов директории с нужным именем
+			for _, child := range currentDir.Children {
+				if child.Name == args[1] && child.IsDir {
+					dir = child
+					found = true
+					break
+				}
+			}
+
+			// Если папка не найдена
+			if !found {
+				return fmt.Errorf("каталаог '%s' не найден", args[1])
+			}
 		}
-		fmt.Printf("[stub] ls вызван. Аргументы: %v\n", args[1:]) // Заглушка
-	case "cd":
+
+		// Вывод содержимого
+		for _, child := range dir.Children {
+			if child.IsDir {
+				fmt.Printf("[DIR] %s\n", child.Name)
+			} else {
+				fmt.Printf("      %s\n", child.Name)
+			}
+		}
+
+	case "cd": // Переход к директории
 		// У cd может быть только 1 аргумент
 		if len(args) != 2 {
 			return errors.New("ошибка: неправильное использование cd <path>")
 		}
-		fmt.Printf("[stub] cd вызван. Аргумент: %s\n", args[1]) // Заглушка
-	default:
+
+		target := args[1] // Цель
+
+		// Переход к родительской директории
+		if target == ".." && currentDir.Parent != nil {
+			currentDir = currentDir.Parent
+			return nil
+		}
+
+		// Поиск дочерней директории с нужным именем
+		for _, child := range currentDir.Children {
+			if child.Name == target && child.IsDir {
+				currentDir = child
+				return nil
+			}
+		}
+
+		// Если директория не найдена
+		return fmt.Errorf("ошибка: каталог '%s' не найден", target)
+
+	case "history": // Показ истории вызванных команд
+		for i, cmd := range history {
+			fmt.Printf("%d: %s\n", i+1, cmd)
+		}
+
+	case "uname": // Показ сведений об ОС
+		fmt.Printf("OS: %s\n", runtime.GOOS)
+		fmt.Printf("Arch: %s\n", runtime.GOARCH)
+
+	default: // При неизвестной команде
 		return fmt.Errorf("ошибка: неизвестная команда '%s'", cmd)
 	}
 
@@ -189,6 +249,8 @@ func printHelp() {
 	fmt.Println("  help       - показать подсказку")
 	fmt.Println("  ls [path]  - показать содержимое(заглушка)")
 	fmt.Println("  cd <path>  - сменить путь(заглушка)")
+	fmt.Println("  history    - показать историю команд")
+	fmt.Println("  uanme      - информация об ОС")
 	fmt.Println("  exit, quit - выйти из эмулятора")
 }
 
