@@ -205,7 +205,7 @@ func handleCommand(args []string) error {
 	case "cd": // Переход к директории
 		// У cd может быть только 1 аргумент
 		if len(args) != 2 {
-			return errors.New("ошибка: неправильное использование cd <path>")
+			return errors.New("ошибка: использование cd <path>")
 		}
 
 		target := args[1] // Цель
@@ -236,6 +236,34 @@ func handleCommand(args []string) error {
 		fmt.Printf("OS: %s\n", runtime.GOOS)
 		fmt.Printf("Arch: %s\n", runtime.GOARCH)
 
+	case "rmdir": // Удаление пустой директории
+		if len(args) != 2 {
+			return errors.New("ошибка: использование rmdir <dirname>")
+		}
+
+		dirName := args[1]
+		for i, child := range currentDir.Children {
+			if child.Name == dirName {
+				// Проверка на директорию
+				if !child.IsDir {
+					return fmt.Errorf("'%s' - это файл, а не директория", dirName)
+				}
+
+				// Проверка на заполненность 
+				if len(child.Children) > 0 {
+					return fmt.Errorf("каталог '%s' не пуст", dirName)
+				}
+
+				// Удаляем узел
+				currentDir.Children = append(currentDir.Children[:i], currentDir.Children[i+1:]...)
+				fmt.Printf("Каталог '%s' удалён\n", dirName)
+				return nil
+			}
+		}
+
+		// Если директория не найдена
+		return fmt.Errorf("ошибка: каталог '%s' не найден", dirName)
+
 	default: // При неизвестной команде
 		return fmt.Errorf("ошибка: неизвестная команда '%s'", cmd)
 	}
@@ -250,7 +278,8 @@ func printHelp() {
 	fmt.Println("  ls [path]  - показать содержимое(заглушка)")
 	fmt.Println("  cd <path>  - сменить путь(заглушка)")
 	fmt.Println("  history    - показать историю команд")
-	fmt.Println("  uanme      - информация об ОС")
+	fmt.Println("  uname      - информация об ОС")
+	fmt.Println("  rmdir <d>  - удаление пустой директории")
 	fmt.Println("  exit, quit - выйти из эмулятора")
 }
 

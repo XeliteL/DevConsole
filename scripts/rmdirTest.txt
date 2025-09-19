@@ -1,0 +1,12 @@
+# Тест rmdir
+ls
+
+rmdir file1.txt
+
+rmdir subdir
+
+cd subdirEmpty
+cd ..
+rmdir subdirEmpty
+
+exit
