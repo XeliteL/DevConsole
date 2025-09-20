@@ -21,11 +21,10 @@ type Node struct {
 	Parent   *Node   // Ссылка на родительскую директорию
 }
 
-// Текущая директория
-var currentDir *Node
-
-// История команд
-var history []string
+type Shell struct {
+	currentDir *Node    // Текущая директория
+	history    []string // История команд
+}
 
 // Создание нового пустого VFS
 func newEmptyVFS() *Node {
@@ -155,14 +154,14 @@ func parseArgs(line string) ([]string, error) {
 }
 
 // === Обработчик команд ===
-func handleCommand(args []string) error {
+func (sh *Shell) handleCommand(args []string) error {
 	// При пустой строке
 	if len(args) == 0 {
 		return nil
 	}
 
 	// Сохранение команды в историю
-	history = append(history, strings.Join(args, " "))
+	sh.history = append(sh.history, strings.Join(args, " "))
 
 	cmd := args[0] // Определение команды
 	switch cmd {
@@ -174,12 +173,12 @@ func handleCommand(args []string) error {
 		os.Exit(0)
 
 	case "ls": // Вывод содержимого директории
-		dir := currentDir // При отсутствии аргумента выводим текущую директорию
+		dir := sh.currentDir // При отсутствии аргумента выводим текущую директорию
 		// При указании пути
 		if len(args) == 2 {
 			found := false
 			// Поиск среди дочерних элементов директории с нужным именем
-			for _, child := range currentDir.Children {
+			for _, child := range sh.currentDir.Children {
 				if child.Name == args[1] && child.IsDir {
 					dir = child
 					found = true
@@ -211,15 +210,15 @@ func handleCommand(args []string) error {
 		target := args[1] // Цель
 
 		// Переход к родительской директории
-		if target == ".." && currentDir.Parent != nil {
-			currentDir = currentDir.Parent
+		if target == ".." && sh.currentDir.Parent != nil {
+			sh.currentDir = sh.currentDir.Parent
 			return nil
 		}
 
 		// Поиск дочерней директории с нужным именем
-		for _, child := range currentDir.Children {
+		for _, child := range sh.currentDir.Children {
 			if child.Name == target && child.IsDir {
-				currentDir = child
+				sh.currentDir = child
 				return nil
 			}
 		}
@@ -228,7 +227,7 @@ func handleCommand(args []string) error {
 		return fmt.Errorf("ошибка: каталог '%s' не найден", target)
 
 	case "history": // Показ истории вызванных команд
-		for i, cmd := range history {
+		for i, cmd := range sh.history {
 			fmt.Printf("%d: %s\n", i+1, cmd)
 		}
 
@@ -242,20 +241,20 @@ func handleCommand(args []string) error {
 		}
 
 		dirName := args[1]
-		for i, child := range currentDir.Children {
+		for i, child := range sh.currentDir.Children {
 			if child.Name == dirName {
 				// Проверка на директорию
 				if !child.IsDir {
 					return fmt.Errorf("'%s' - это файл, а не директория", dirName)
 				}
 
-				// Проверка на заполненность 
+				// Проверка на заполненность
 				if len(child.Children) > 0 {
 					return fmt.Errorf("каталог '%s' не пуст", dirName)
 				}
 
 				// Удаляем узел
-				currentDir.Children = append(currentDir.Children[:i], currentDir.Children[i+1:]...)
+				sh.currentDir.Children = append(sh.currentDir.Children[:i], sh.currentDir.Children[i+1:]...)
 				fmt.Printf("Каталог '%s' удалён\n", dirName)
 				return nil
 			}
@@ -284,10 +283,10 @@ func printHelp() {
 }
 
 // === Интерактивный режим запуска REPL ===
-func runREPL() {
+func (sh *Shell) runREPL() {
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
-		fmt.Printf("%s> ", currentDir.Name) // Приглашение к вводу
+		fmt.Printf("%s> ", sh.currentDir.Name) // Приглашение к вводу
 
 		// Чтение строки пользоватиля
 		if !scanner.Scan() { // Ошибка ввода
@@ -307,7 +306,7 @@ func runREPL() {
 		}
 
 		// Выполнение команды обработчика
-		if err := handleCommand(tokens); err != nil {
+		if err := sh.handleCommand(tokens); err != nil {
 			fmt.Printf("Ошибка обработчика: %v\n", err)
 		}
 	}
@@ -319,7 +318,7 @@ func runREPL() {
 }
 
 // === Запуск REPL по скрипту ===
-func runScript(path string) error {
+func (sh *Shell) runScript(path string) error {
 	file, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf("не удалось открыть скрипт: %v", err)
@@ -339,7 +338,7 @@ func runScript(path string) error {
 		}
 
 		// Имитация диалога с пользователем
-		fmt.Printf("%s> %s\n", currentDir.Name, line)
+		fmt.Printf("%s> %s\n", sh.currentDir.Name, line)
 
 		// Парсинг и выполнение команды обработчика
 		tokens, err := parseArgs(line)
@@ -348,7 +347,7 @@ func runScript(path string) error {
 			continue
 		}
 
-		if err := handleCommand(tokens); err != nil {
+		if err := sh.handleCommand(tokens); err != nil {
 			fmt.Printf("Ошибка обработчика: %v\n", err)
 		}
 	}
@@ -382,16 +381,17 @@ func main() {
 	} else {
 		root = newEmptyVFS()
 	}
-	currentDir = root // Ставаим корень, как текущую директорию
+
+	sh := &Shell{currentDir: root} // Ставаим корень, как текущую директорию
 
 	// Запуск скрипта
 	if *pathScript != "" {
-		if err := runScript(*pathScript); err != nil {
+		if err := sh.runScript(*pathScript); err != nil {
 			fmt.Printf("Скрипт остановлен: %v\n", err)
 			return
 		}
 	}
 
 	// Запуск в интерактивном режиме при отсутствии скрипта
-	runREPL()
+	sh.runREPL()
 }
