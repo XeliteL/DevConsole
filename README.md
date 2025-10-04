@@ -10,6 +10,7 @@
    Проект реализован поэтапно (от простого REPL до полнофункционального эмулятора с командами ls, cd, history, uname, rmdir).
 
    Структура проекта: 
+   ```TEXT
       devConsole
       ├── bats/                   # Запуск скриптов
       ├── data/                   # Файлы данных и конфигурации
@@ -27,21 +28,24 @@
       │   ├── createVFS.go
       │   └── vfs.go
       └── main.go                 # Главная программа
-
+   ```
 2. Функции и настройки
    Основные функции:
+   ```
       1) buildVFS(path string, parent *Node) — загружает дерево директорий с диска.
       2) newEmptyVFS() — создаёт пустую VFS в памяти.
       3) parseArgs(line string) — парсинг аргументов команд с кавычками и экранированием.
       4) handleCommand(args []string) — обработка команд (ls, cd, history, uname, rmdir).
       5) runREPL() — интерактивный режим.
       6) runScript(path string) — запуск команд из файла-скрипта.
-
+   ```
    Параметры запуска:
+   ```
       1) --VFS <path> — путь к директории, из которой строится VFS.
       2) --Script <path> — путь к файлу со скриптом для выполнения.
-
+   ```
    Поддерживаемые команды:
+   ```
       1) help        - вывести список доступных команд
       2) ls [path]   - показать содержимое директории
       3) cd <dir>    - перейти в директорию (cd .. — на уровень выше)
@@ -49,7 +53,7 @@
       5) uname       - показать информацию о ОС и архитектуре
       6) rmdir <dir> - удалить пустую директорию
       7) exit, quit  - завершить работу
-
+   ```
 3. Сборка проекта и запуск тестов
    Сборка проекта:
       go build -o emulator main.go
@@ -62,25 +66,26 @@
       go run main.go --VFS ./data --Script ./scripts/stage4_commands.txt
 
    Запуск готовых тестов осуществляется в папке bats:
-      bats/
+      ```bats/
       ├── stage1.bat       # тест Этапа 1
       ├── stage2.bat       # тест Этапа 2
       ├── stage3.bat       # тест Этапа 3
       ├── stage4.bat       # тест Этапа 4
       └── stage5.bat       # тест Этапа 5
+      ```
 
 4. Примеры использования:
    Пример 1. Навигация по директориям:
-      data> ls
+      ```data> ls
       [DIR] subdir
             file1.txt
             file2.txt
-
       data> cd subdir
       subdir> ls
             nested.txt
-
+   ```
    Пример 2. История команд и uname:
+   ```
       data> ls
       [DIR] subdir
             file1.txt
@@ -93,9 +98,9 @@
       1: ls
       2: uname
       3: history
-
+   ```
    Пример 3. Удаление пустой директории:
-      data> ls
+      ```data> ls
       [DIR] subdir_empty
             file1.txt
 
@@ -104,3 +109,4 @@
 
       data> ls
             file1.txt
+      ```
